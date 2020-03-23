@@ -1,0 +1,754 @@
+---
+title: "Analysis EMG"
+author: '[Antonio Schettino](https://osf.io/zbv65/ "Antonio Schettino")'
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    code_folding: hide
+    highlight: tango
+    theme: united
+    toc: yes
+    toc_float: yes
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+
+# ### install packages
+# install.packages(c(
+#   "knitr", "kableExtra",
+#   "tidyverse",
+#   "rcompanion", "ARTool", "ez"
+#   "viridis", "cowplot"
+# ),
+# dependencies = TRUE
+# )
+# devtools::install_github("mikabr/ggpirate", dependencies = TRUE)
+
+### load packages
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+library(rcompanion)
+library(ARTool)
+library(ez)
+library(viridis)
+library(ggpirate)
+library(cowplot)
+
+# for RMarkdown
+options(digits = 2) # number of decimal digits
+opts_chunk$set(
+  fig.dim = c(10, 10),
+  warning = FALSE, # no package warnings
+  message = FALSE # no package messages
+)
+
+# ggplot custom theme
+theme_custom <- theme_minimal(base_size = 16) +
+  theme(
+    strip.text = element_text(
+      hjust = .5,
+      size = 20
+    ),
+    legend.title = element_blank(),
+    plot.title = element_text(size = 26, hjust = .5),
+    legend.box.background = element_rect(color = "transparent") # transparent outer line
+  )
+
+seed_smorfia <- 1 # Italia!
+set.seed(seed_smorfia) # seed for random number generation
+
+```
+
+***
+***
+
+# Cue & Target
+
+```{r all_data}
+
+EMG <- read_csv("EMG.csv") %>%
+  pivot_longer(
+    Reappraisal_Unexpected:Appraisal_Expected,
+    names_to = "condition",
+    values_to = "amplitude"
+  ) %>%
+  separate(
+    condition,
+    c("ER_Strategy", "Expectation"),
+    sep = "_",
+    remove = TRUE
+  ) %>%
+  mutate(
+    Participant = as_factor(Participant),
+    Believed_Story = as_factor(Believed_Story),
+    Stimulus = as_factor(Stimulus),
+    ER_Strategy = as_factor(ER_Strategy),
+    Expectation = as_factor(Expectation)
+  )
+
+# summary
+EMG_summary <-
+  EMG %>%
+  group_by(Stimulus, ER_Strategy, Expectation) %>%
+  summarize(
+    median = median(amplitude),
+    mad = mad(amplitude)
+  )
+
+kable(
+  EMG_summary,
+  digits = c(0, 0, 0, 5, 5),
+  caption = "Descriptive statistics of EMG amplitude, separately for each condition."
+) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+## Plot
+
+```{r all_plot, fig.cap = "EMG amplitude in response to cue and target. **Note**: 18 values are outside the plot."}
+
+# plot
+EMG %>%
+  ggplot(
+    aes(
+      x = ER_Strategy,
+      y = amplitude,
+      color = Expectation,
+      fill = Expectation
+    )
+  ) +
+  geom_pirate(
+    bars = FALSE,
+    cis = TRUE,
+    lines = TRUE, lines_params = list(color = "black", alpha = .3),
+    points = TRUE, points_params = list(color = "black", shape = 21, size = 5, alpha = .2),
+    violins = TRUE, violins_params = list(size = 1),
+    show.legend = TRUE
+  ) +
+  scale_color_viridis_d(option = "cividis") +
+  scale_fill_viridis_d(option = "cividis") +
+  scale_y_continuous(limits = c(-.05, .05)) +
+  ggtitle("EMG") +
+  facet_wrap(. ~ Stimulus) +
+  theme_custom +
+  theme(
+    legend.position = c(.55, .8),
+    axis.title.x = element_blank()
+  )
+
+```
+
+## Analysis
+
+Repeated measures nonparametric ANOVA (Aligned Rank Transform).
+
+```{r all_analysis}
+
+# repeated measures nonparametric ANOVA, Aligned Rank Transform
+all_ART <- anova(
+  art(amplitude ~ Stimulus * ER_Strategy * Expectation + Error(Participant),
+    data = EMG
+  )
+) %>%
+  mutate(
+    eta.sq.part = `Sum Sq` / (`Sum Sq` + `Sum Sq.res`) # partial eta squared
+  )
+
+all_ART %>%
+  dplyr::select(`Term`, `Df`, `Df.res`, `F` = `F value`, p.value = `Pr(>F)`, `eta.sq.part`) %>%
+  kable(.,
+    digits = c(0, 0, 0, 2, 3, 3),
+    caption = "Repeated measures nonparametric ANOVA (Aligned Rank Transform)."
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+# Cue
+
+Analyze EMG following cue presentation.
+
+```{r cue_data}
+
+# keep only EMG in response to cue
+EMG_cue <- filter(EMG, Stimulus == "cue") %>%
+  dplyr::select(-Stimulus)
+
+```
+
+## Plot
+
+```{r cue_plot, fig.cap = "EMG amplitude in response to cue. **Note**: 9 values are outside the plot."}
+
+# plot
+EMG_cue %>%
+  ggplot(
+    aes(
+      x = ER_Strategy,
+      y = amplitude,
+      color = Expectation,
+      fill = Expectation
+    )
+  ) +
+  geom_pirate(
+    bars = FALSE,
+    cis = TRUE,
+    lines = TRUE, lines_params = list(color = "black", alpha = .3),
+    points = TRUE, points_params = list(color = "black", shape = 21, size = 5, alpha = .2),
+    violins = TRUE, violins_params = list(size = 1),
+    show.legend = TRUE
+  ) +
+  scale_color_viridis_d(option = "cividis") +
+  scale_fill_viridis_d(option = "cividis") +
+  scale_y_continuous(limits = c(-.05, .05)) +
+  ggtitle("Cue EMG") +
+  theme_custom +
+  theme(
+    legend.position = c(.5, .15),
+    axis.title.x = element_blank()
+  )
+
+```
+
+## Analysis
+
+Repeated measures nonparametric ANOVA (Aligned Rank Transform), post-hoc Paired Samples Wilcoxon Tests.
+
+```{r cue_analysis}
+
+# repeated measures nonparametric ANOVA, Aligned Rank Transform
+cue_ART <- anova(
+  art(amplitude ~ ER_Strategy * Expectation + Error(Participant),
+    data = EMG_cue
+  )
+) %>%
+  mutate(
+    eta.sq.part = `Sum Sq` / (`Sum Sq` + `Sum Sq.res`) # partial eta squared
+  )
+
+cue_ART %>%
+  dplyr::select(`Term`, `Df`, `Df.res`, `F` = `F value`, p.value = `Pr(>F)`, `eta.sq.part`) %>%
+  kable(.,
+    digits = c(0, 0, 0, 2, 3, 3),
+    caption = "Repeated measures nonparametric ANOVA (Aligned Rank Transform)."
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+## post-hoc analyses
+# Appraisal, Expected vs. Unexpected
+# Paired Samples Wilcoxon Test
+EMG_Appraisal_ExpectedUnexpected_Wilcoxon <-
+  wilcox.test(filter(EMG_cue, ER_Strategy == "Appraisal" & Expectation == "Expected")$amplitude,
+    filter(EMG_cue, ER_Strategy == "Appraisal" & Expectation == "Unexpected")$amplitude,
+    alternative = "two.sided",
+    mu = 0,
+    paired = TRUE,
+    exact = TRUE,
+    correct = TRUE,
+    conf.int = TRUE, conf.level = 0.95
+  )
+
+# effect size r
+EMG_Appraisal_ExpectedUnexpected_r <-
+  wilcoxonPairedR(filter(EMG_cue, ER_Strategy == "Appraisal" & Expectation %in% c("Expected", "Unexpected"))$amplitude,
+    filter(EMG_cue, ER_Strategy == "Appraisal" & Expectation %in% c("Expected", "Unexpected"))$Expectation,
+    ci = TRUE, conf = 0.95,
+    type = "bca", R = 5000,
+    cases = TRUE
+  )
+
+# Reappraisal, Expected vs. Unexpected
+# Paired Samples Wilcoxon Test
+EMG_Reappraisal_ExpectedUnexpected_Wilcoxon <-
+  wilcox.test(filter(EMG_cue, ER_Strategy == "Reappraisal" & Expectation == "Expected")$amplitude,
+    filter(EMG_cue, ER_Strategy == "Reappraisal" & Expectation == "Unexpected")$amplitude,
+    alternative = "two.sided",
+    mu = 0,
+    paired = TRUE,
+    exact = TRUE,
+    correct = TRUE,
+    conf.int = TRUE, conf.level = 0.95
+  )
+
+# effect size r
+EMG_Reappraisal_ExpectedUnexpected_r <-
+  wilcoxonPairedR(filter(EMG_cue, ER_Strategy == "Reappraisal" & Expectation %in% c("Expected", "Unexpected"))$amplitude,
+    filter(EMG_cue, ER_Strategy == "Reappraisal" & Expectation %in% c("Expected", "Unexpected"))$Expectation,
+    ci = TRUE, conf = 0.95,
+    type = "bca", R = 5000,
+    cases = TRUE
+  )
+
+# Expected, Appraisal vs. Reappraisal
+# Paired Samples Wilcoxon Test
+EMG_Expected_AppraisalReappraisal_Wilcoxon <-
+  wilcox.test(filter(EMG_cue, ER_Strategy == "Appraisal" & Expectation == "Expected")$amplitude,
+    filter(EMG_cue, ER_Strategy == "Reappraisal" & Expectation == "Expected")$amplitude,
+    alternative = "two.sided",
+    mu = 0,
+    paired = TRUE,
+    exact = TRUE,
+    correct = TRUE,
+    conf.int = TRUE, conf.level = 0.95
+  )
+
+# effect size r
+EMG_Expected_AppraisalReappraisal_r <-
+  wilcoxonPairedR(filter(EMG_cue, ER_Strategy %in% c("Appraisal", "Reappraisal") & Expectation == "Expected")$amplitude,
+    filter(EMG_cue, ER_Strategy %in% c("Appraisal", "Reappraisal") & Expectation == "Expected")$ER_Strategy,
+    ci = TRUE, conf = 0.95,
+    type = "bca", R = 5000,
+    cases = TRUE
+  )
+
+# Unexpected, Appraisal vs. Reappraisal
+# Paired Samples Wilcoxon Test
+EMG_Unexpected_AppraisalReappraisal_Wilcoxon <-
+  wilcox.test(filter(EMG_cue, ER_Strategy == "Appraisal" & Expectation == "Unexpected")$amplitude,
+    filter(EMG_cue, ER_Strategy == "Reappraisal" & Expectation == "Unexpected")$amplitude,
+    alternative = "two.sided",
+    mu = 0,
+    paired = TRUE,
+    exact = TRUE,
+    correct = TRUE,
+    conf.int = TRUE, conf.level = 0.95
+  )
+
+# effect size r
+EMG_Unexpected_AppraisalReappraisal_r <-
+  wilcoxonPairedR(filter(EMG_cue, ER_Strategy %in% c("Appraisal", "Reappraisal") & Expectation == "Unexpected")$amplitude,
+    filter(EMG_cue, ER_Strategy %in% c("Appraisal", "Reappraisal") & Expectation == "Unexpected")$ER_Strategy,
+    ci = TRUE, conf = 0.95,
+    type = "bca", R = 5000,
+    cases = TRUE
+  )
+
+# summary
+cue_ART_posthoc <- tibble(
+  "comparison" = c(
+    "Appraisal, Expected vs. Unexpected", "Reappraisal, Expected vs. Unexpected",
+    "Expected, Appraisal vs. Reappraisal", "Unexpected, Appraisal vs. Reappraisal"
+  ),
+  "V" = c(
+    EMG_Appraisal_ExpectedUnexpected_Wilcoxon$statistic, EMG_Reappraisal_ExpectedUnexpected_Wilcoxon$statistic,
+    EMG_Expected_AppraisalReappraisal_Wilcoxon$statistic, EMG_Unexpected_AppraisalReappraisal_Wilcoxon$statistic
+  ),
+  "p" = c(
+    EMG_Appraisal_ExpectedUnexpected_Wilcoxon$p.value, EMG_Reappraisal_ExpectedUnexpected_Wilcoxon$p.value,
+    EMG_Expected_AppraisalReappraisal_Wilcoxon$p.value, EMG_Unexpected_AppraisalReappraisal_Wilcoxon$p.value
+  ),
+  "r" = c(
+    EMG_Appraisal_ExpectedUnexpected_r$r, EMG_Reappraisal_ExpectedUnexpected_r$r,
+    EMG_Expected_AppraisalReappraisal_r$r, EMG_Unexpected_AppraisalReappraisal_r$r
+  ),
+  "CI95_lower" = c(
+    EMG_Appraisal_ExpectedUnexpected_r$lower.ci, EMG_Reappraisal_ExpectedUnexpected_r$lower.ci,
+    EMG_Expected_AppraisalReappraisal_r$lower.ci, EMG_Unexpected_AppraisalReappraisal_r$lower.ci
+  ),
+  "CI95_upper" = c(
+    EMG_Appraisal_ExpectedUnexpected_r$upper.ci, EMG_Reappraisal_ExpectedUnexpected_r$upper.ci,
+    EMG_Expected_AppraisalReappraisal_r$upper.ci, EMG_Unexpected_AppraisalReappraisal_r$upper.ci
+  )
+) %>%
+  mutate("p" = p.adjust(p, method = "holm")) # Bonferroni-Holm correction on post-hoc tests
+
+kable(cue_ART_posthoc,
+  digits = c(0, 0, 3, 2, 2, 2),
+  caption = "Post-hoc Repeated Samples Wilcoxon tests (Bonferroni-Holm p-value correction), bootstrapped effect size."
+) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+# Target
+
+Analyze EMG following target presentation.
+
+```{r target_data}
+
+# keep only EMG in response to target
+EMG_target <- filter(EMG, Stimulus == "target") %>%
+  dplyr::select(-Stimulus)
+
+```
+
+## Plot
+
+```{r target_plot, fig.cap = "EMG amplitude in response to target. **Note**: 9 values are outside the plot."}
+
+# plot
+EMG_target %>%
+  ggplot(
+    aes(
+      x = ER_Strategy,
+      y = amplitude,
+      color = Expectation,
+      fill = Expectation
+    )
+  ) +
+  geom_pirate(
+    bars = FALSE,
+    cis = TRUE,
+    lines = TRUE, lines_params = list(color = "black", alpha = .3),
+    points = TRUE, points_params = list(color = "black", shape = 21, size = 5, alpha = .2),
+    violins = TRUE, violins_params = list(size = 1),
+    show.legend = TRUE
+  ) +
+  scale_color_viridis_d(option = "cividis") +
+  scale_fill_viridis_d(option = "cividis") +
+  scale_y_continuous(limits = c(-.05, .05)) +
+  ggtitle("Cue EMG") +
+  theme_custom +
+  theme(
+    legend.position = c(.5, .15),
+    axis.title.x = element_blank()
+  )
+
+```
+
+## Analysis
+
+Repeated measures nonparametric ANOVA (Aligned Rank Transform), post-hoc Paired Samples Wilcoxon Tests.
+
+```{r target_analysis}
+
+# repeated measures nonparametric ANOVA, Aligned Rank Transform
+target_ART <- anova(
+  art(amplitude ~ ER_Strategy * Expectation + Error(Participant),
+    data = EMG_target
+  )
+) %>%
+  mutate(
+    eta.sq.part = `Sum Sq` / (`Sum Sq` + `Sum Sq.res`) # partial eta squared
+  )
+
+target_ART %>%
+  dplyr::select(`Term`, `Df`, `Df.res`, `F` = `F value`, p.value = `Pr(>F)`, `eta.sq.part`) %>%
+  kable(.,
+    digits = c(0, 0, 0, 2, 3, 3),
+    caption = "Repeated measures nonparametric ANOVA (Aligned Rank Transform)."
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+## post-hoc analyses
+# Appraisal, Expected vs. Unexpected
+# Paired Samples Wilcoxon Test
+EMG_Appraisal_ExpectedUnexpected_Wilcoxon <-
+  wilcox.test(filter(EMG_target, ER_Strategy == "Appraisal" & Expectation == "Expected")$amplitude,
+    filter(EMG_target, ER_Strategy == "Appraisal" & Expectation == "Unexpected")$amplitude,
+    alternative = "two.sided",
+    mu = 0,
+    paired = TRUE,
+    exact = TRUE,
+    correct = TRUE,
+    conf.int = TRUE, conf.level = 0.95
+  )
+
+# effect size r
+EMG_Appraisal_ExpectedUnexpected_r <-
+  wilcoxonPairedR(filter(EMG_target, ER_Strategy == "Appraisal" & Expectation %in% c("Expected", "Unexpected"))$amplitude,
+    filter(EMG_target, ER_Strategy == "Appraisal" & Expectation %in% c("Expected", "Unexpected"))$Expectation,
+    ci = TRUE, conf = 0.95,
+    type = "bca", R = 5000,
+    cases = TRUE
+  )
+
+# Reappraisal, Expected vs. Unexpected
+# Paired Samples Wilcoxon Test
+EMG_Reappraisal_ExpectedUnexpected_Wilcoxon <-
+  wilcox.test(filter(EMG_target, ER_Strategy == "Reappraisal" & Expectation == "Expected")$amplitude,
+    filter(EMG_target, ER_Strategy == "Reappraisal" & Expectation == "Unexpected")$amplitude,
+    alternative = "two.sided",
+    mu = 0,
+    paired = TRUE,
+    exact = TRUE,
+    correct = TRUE,
+    conf.int = TRUE, conf.level = 0.95
+  )
+
+# effect size r
+EMG_Reappraisal_ExpectedUnexpected_r <-
+  wilcoxonPairedR(filter(EMG_target, ER_Strategy == "Reappraisal" & Expectation %in% c("Expected", "Unexpected"))$amplitude,
+    filter(EMG_target, ER_Strategy == "Reappraisal" & Expectation %in% c("Expected", "Unexpected"))$Expectation,
+    ci = TRUE, conf = 0.95,
+    type = "bca", R = 5000,
+    cases = TRUE
+  )
+
+# Expected, Appraisal vs. Reappraisal
+# Paired Samples Wilcoxon Test
+EMG_Expected_AppraisalReappraisal_Wilcoxon <-
+  wilcox.test(filter(EMG_target, ER_Strategy == "Appraisal" & Expectation == "Expected")$amplitude,
+    filter(EMG_target, ER_Strategy == "Reappraisal" & Expectation == "Expected")$amplitude,
+    alternative = "two.sided",
+    mu = 0,
+    paired = TRUE,
+    exact = TRUE,
+    correct = TRUE,
+    conf.int = TRUE, conf.level = 0.95
+  )
+
+# effect size r
+EMG_Expected_AppraisalReappraisal_r <-
+  wilcoxonPairedR(filter(EMG_target, ER_Strategy %in% c("Appraisal", "Reappraisal") & Expectation == "Expected")$amplitude,
+    filter(EMG_target, ER_Strategy %in% c("Appraisal", "Reappraisal") & Expectation == "Expected")$ER_Strategy,
+    ci = TRUE, conf = 0.95,
+    type = "bca", R = 5000,
+    cases = TRUE
+  )
+
+# Unexpected, Appraisal vs. Reappraisal
+# Paired Samples Wilcoxon Test
+EMG_Unexpected_AppraisalReappraisal_Wilcoxon <-
+  wilcox.test(filter(EMG_target, ER_Strategy == "Appraisal" & Expectation == "Unexpected")$amplitude,
+    filter(EMG_target, ER_Strategy == "Reappraisal" & Expectation == "Unexpected")$amplitude,
+    alternative = "two.sided",
+    mu = 0,
+    paired = TRUE,
+    exact = TRUE,
+    correct = TRUE,
+    conf.int = TRUE, conf.level = 0.95
+  )
+
+# effect size r
+EMG_Unexpected_AppraisalReappraisal_r <-
+  wilcoxonPairedR(filter(EMG_target, ER_Strategy %in% c("Appraisal", "Reappraisal") & Expectation == "Unexpected")$amplitude,
+    filter(EMG_target, ER_Strategy %in% c("Appraisal", "Reappraisal") & Expectation == "Unexpected")$ER_Strategy,
+    ci = TRUE, conf = 0.95,
+    type = "bca", R = 5000,
+    cases = TRUE
+  )
+
+# summary
+target_ART_posthoc <- tibble(
+  "comparison" = c(
+    "Appraisal, Expected vs. Unexpected", "Reappraisal, Expected vs. Unexpected",
+    "Expected, Appraisal vs. Reappraisal", "Unexpected, Appraisal vs. Reappraisal"
+  ),
+  "V" = c(
+    EMG_Appraisal_ExpectedUnexpected_Wilcoxon$statistic, EMG_Reappraisal_ExpectedUnexpected_Wilcoxon$statistic,
+    EMG_Expected_AppraisalReappraisal_Wilcoxon$statistic, EMG_Unexpected_AppraisalReappraisal_Wilcoxon$statistic
+  ),
+  "p" = c(
+    EMG_Appraisal_ExpectedUnexpected_Wilcoxon$p.value, EMG_Reappraisal_ExpectedUnexpected_Wilcoxon$p.value,
+    EMG_Expected_AppraisalReappraisal_Wilcoxon$p.value, EMG_Unexpected_AppraisalReappraisal_Wilcoxon$p.value
+  ),
+  "r" = c(
+    EMG_Appraisal_ExpectedUnexpected_r$r, EMG_Reappraisal_ExpectedUnexpected_r$r,
+    EMG_Expected_AppraisalReappraisal_r$r, EMG_Unexpected_AppraisalReappraisal_r$r
+  ),
+  "CI95_lower" = c(
+    EMG_Appraisal_ExpectedUnexpected_r$lower.ci, EMG_Reappraisal_ExpectedUnexpected_r$lower.ci,
+    EMG_Expected_AppraisalReappraisal_r$lower.ci, EMG_Unexpected_AppraisalReappraisal_r$lower.ci
+  ),
+  "CI95_upper" = c(
+    EMG_Appraisal_ExpectedUnexpected_r$upper.ci, EMG_Reappraisal_ExpectedUnexpected_r$upper.ci,
+    EMG_Expected_AppraisalReappraisal_r$upper.ci, EMG_Unexpected_AppraisalReappraisal_r$upper.ci
+  )
+) %>%
+  mutate("p" = p.adjust(p, method = "holm")) # Bonferroni-Holm correction on post-hoc tests
+
+kable(target_ART_posthoc,
+  digits = c(0, 0, 3, 2, 2, 2),
+  caption = "Post-hoc Repeated Samples Wilcoxon tests (Bonferroni-Holm p-value correction), bootstrapped effect size."
+) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+# Exploratory Analysis
+
+## Block order
+
+Participants with even numbers started with reappraisal blocks, participants with uneven numbers started with appraisal block. Does block order influence EMG amplitude?
+
+```{r block_data}
+
+EMG <- EMG %>%
+  mutate(
+    start_block = as_factor(
+      ifelse(
+        as.numeric(Participant) %% 2 == 0,
+        "start_Reappraisal",
+        "start_Appraisal"
+      )
+    )
+  )
+
+```
+
+```{r block_plots}
+
+# plot start appraisal
+plot_start_appraisal <-
+  EMG %>%
+  filter(start_block == "start_Appraisal") %>%
+  ggplot(
+    aes(
+      x = ER_Strategy,
+      y = amplitude,
+      color = Expectation,
+      fill = Expectation
+    )
+  ) +
+  geom_pirate(
+    bars = FALSE,
+    cis = TRUE,
+    lines = TRUE, lines_params = list(color = "black", alpha = .3),
+    points = TRUE, points_params = list(color = "black", shape = 21, size = 5, alpha = .2),
+    violins = TRUE, violins_params = list(size = 1),
+    show.legend = TRUE
+  ) +
+  scale_color_viridis_d(option = "cividis") +
+  scale_fill_viridis_d(option = "cividis") +
+  scale_y_continuous(limits = c(-.05, .05)) +
+  ggtitle("appraisal first") +
+  facet_wrap(. ~ Stimulus) +
+  theme_custom +
+  theme(
+    legend.position = c(.55, .8),
+    axis.title.x = element_blank()
+  )
+  
+# plot start reappraisal
+plot_start_reappraisal <-
+  EMG %>%
+  filter(start_block == "start_Reappraisal") %>%
+  ggplot(
+    aes(
+      x = ER_Strategy,
+      y = amplitude,
+      color = Expectation,
+      fill = Expectation
+    )
+  ) +
+  geom_pirate(
+    bars = FALSE,
+    cis = TRUE,
+    lines = TRUE, lines_params = list(color = "black", alpha = .3),
+    points = TRUE, points_params = list(color = "black", shape = 21, size = 5, alpha = .2),
+    violins = TRUE, violins_params = list(size = 1),
+    show.legend = TRUE
+  ) +
+  scale_color_viridis_d(option = "cividis") +
+  scale_fill_viridis_d(option = "cividis") +
+  scale_y_continuous(limits = c(-.05, .05)) +
+  ggtitle("reappraisal first") +
+  facet_wrap(. ~ Stimulus) +
+  theme_custom +
+  theme(
+    legend.position = c(.45, .2),
+    axis.title.x = element_blank()
+  )
+
+# arrange plots in two columns
+plot_block_data <- plot_grid(
+  plot_start_appraisal + theme(legend.position = "none"),
+  plot_start_reappraisal + theme(legend.position = c(.5, .9)),
+  align = "vh",
+  hjust = -1,
+  nrow = 2
+)
+
+plot_block_data
+
+```
+
+The package `ARTool` does not handle split-plot designs, therefore we will run non-parametric permutation tests via the function `ezPerm` from the package `ez`.
+
+```{r block_analysis, eval = FALSE}
+
+block_ez <-
+  ezPerm(
+    data = EMG,
+    dv = amplitude,
+    wid = Participant,
+    within = c(Stimulus, ER_Strategy, Expectation),
+    between = start_block,
+    perms = 1000
+  )
+
+saveRDS(block_ez, file = paste0(getwd(), "/block_ez.rds"), compress = "gzip")
+
+```
+
+```{r block_analysis_results}
+
+block_ez <- readRDS(paste0(getwd(), "/block_ez.rds"))
+
+block_ez %>%
+  kable(.,
+    digits = c(0, 3, 0),
+    caption = "Split-plot ANOVA, control for block order (Appraisal first or Reappraisal first)."
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+Results are **not** influenced by block order.
+
+##  Correlation
+
+Reviewer's comment:
+
+>It seems as though the primary difference during the target phase is for unexpected negative feedback, and it is reduced for reappraised vs. appraised trials. Does something going on during anticipation predict this effect? For example, does the difference in reappraise vs. appraise during anticipation of unexpected feedback (or something else during anticipation) correlate/predict this effect?
+
+```{r spearman}
+
+EMG_Unexpected_corr <- EMG %>%
+  filter(
+    Expectation == "Unexpected"
+  ) %>%
+  dplyr::select(Participant, Stimulus, ER_Strategy, amplitude) %>%
+  pivot_wider(id_cols = Participant,
+              names_from = c(Stimulus, ER_Strategy),
+              values_from = amplitude
+  ) %>%
+  mutate(
+    cue_ReappraisalVsAppraisal = cue_Reappraisal - cue_Appraisal,
+    target_ReappraisalVsAppraisal = target_Reappraisal - target_Appraisal 
+  ) %>%
+  dplyr::select(Participant, cue_ReappraisalVsAppraisal, target_ReappraisalVsAppraisal)
+
+# Spearman's correlation
+corr <- cor.test(
+  x = pull(EMG_Unexpected_corr, "cue_ReappraisalVsAppraisal"),
+  y = pull(EMG_Unexpected_corr, "target_ReappraisalVsAppraisal"),
+  method = "spearman",
+  alternative = "two.sided",
+  exact = TRUE,
+  continuity = TRUE
+)
+
+tibble(
+  "rho" = corr$statistic,
+  "p-value" = corr$p.value
+) %>%
+  kable(.,
+    digits = c(0, 3),
+    caption = ""
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+The difference between Appraisal and Reappraisal during anticipation does **not** statistically correlate with the same difference during the target phase.
+
+***
+***
+
+# Session Info
+
+```{r}
+
+sessionInfo()
+
+```
+
+
