@@ -3,14 +3,14 @@ title: "Analysis EMG"
 author: '[Antonio Schettino](https://osf.io/zbv65/ "Antonio Schettino")'
 date: "`r Sys.Date()`"
 output:
-  pdf_document:
-    toc: yes
   html_document:
     code_folding: hide
     highlight: tango
     theme: united
     toc: yes
     toc_float: yes
+  pdf_document:
+    toc: yes
 editor_options:
   chunk_output_type: console
 ---
@@ -111,7 +111,7 @@ kable(
 
 ## Plot
 
-```{r all_plot, fig.cap = "EMG amplitude in response to cue and target. **Note**: 18 values are outside the plot."}
+```{r all_plot, fig.cap = "**Figure 1**. EMG amplitude in response to cue and target. **Note**: 18 values are outside the plot."}
 
 # plot
 EMG %>%
@@ -184,7 +184,7 @@ EMG_cue <- filter(EMG, Stimulus == "cue") %>%
 
 ## Plot
 
-```{r cue_plot, fig.cap = "EMG amplitude in response to cue. **Note**: 9 values are outside the plot."}
+```{r cue_plot, fig.cap = "**Figure 2**. EMG amplitude in response to cue. **Note**: 9 values are outside the plot."}
 
 # plot
 EMG_cue %>%
@@ -380,7 +380,7 @@ EMG_target <- filter(EMG, Stimulus == "target") %>%
 
 ## Plot
 
-```{r target_plot, fig.cap = "EMG amplitude in response to target. **Note**: 9 values are outside the plot."}
+```{r target_plot, fig.cap = "**Figure 3.** EMG amplitude in response to target. **Note**: 9 values are outside the plot."}
 
 # plot
 EMG_target %>%
@@ -403,7 +403,7 @@ EMG_target %>%
   scale_color_viridis_d(option = "cividis") +
   scale_fill_viridis_d(option = "cividis") +
   scale_y_continuous(limits = c(-.05, .05)) +
-  ggtitle("Cue EMG") +
+  ggtitle("Target EMG") +
   theme_custom +
   theme(
     legend.position = c(.5, .15),
@@ -583,7 +583,7 @@ EMG <- EMG %>%
 
 ```
 
-```{r block_plots}
+```{r block_plots, fig.cap = "**Figure 4**. EMG amplitude in response to cue and target, separately for participants who started with Appraisal vs. Reappraisal blocks. **Note**: 9 values are outside the plot."}
 
 # plot start appraisal
 plot_start_appraisal <-
@@ -615,7 +615,7 @@ plot_start_appraisal <-
     legend.position = c(.55, .8),
     axis.title.x = element_blank()
   )
-  
+
 # plot start reappraisal
 plot_start_reappraisal <-
   EMG %>%
@@ -706,13 +706,14 @@ EMG_Unexpected_corr <- EMG %>%
     Expectation == "Unexpected"
   ) %>%
   dplyr::select(Participant, Stimulus, ER_Strategy, amplitude) %>%
-  pivot_wider(id_cols = Participant,
-              names_from = c(Stimulus, ER_Strategy),
-              values_from = amplitude
+  pivot_wider(
+    id_cols = Participant,
+    names_from = c(Stimulus, ER_Strategy),
+    values_from = amplitude
   ) %>%
   mutate(
     cue_ReappraisalVsAppraisal = cue_Reappraisal - cue_Appraisal,
-    target_ReappraisalVsAppraisal = target_Reappraisal - target_Appraisal 
+    target_ReappraisalVsAppraisal = target_Reappraisal - target_Appraisal
   ) %>%
   dplyr::select(Participant, cue_ReappraisalVsAppraisal, target_ReappraisalVsAppraisal)
 
@@ -750,5 +751,3 @@ The difference between Appraisal and Reappraisal during anticipation does **not*
 sessionInfo()
 
 ```
-
-
