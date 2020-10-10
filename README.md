@@ -1,5 +1,5 @@
 # reappraisal-expectation-nasso-2020
-Analysis scripts of the manuscript entitled *"The Role of Cognitive Reappraisal and Expectations in Dealing with Social Feedback"* (Nasso et al., 2020, Emotion).
+Analysis scripts of the manuscript entitled [*"The Role of Cognitive Reappraisal and Expectations in Dealing with Social Feedback"*](https://doi.org/10.1037/emo0000825) (Nasso et al., 2020, Emotion).
 
 In the [`docs`](https://github.com/aschetti/reappraisal-expectation-nasso-2020/tree/master/docs) folder:
 
